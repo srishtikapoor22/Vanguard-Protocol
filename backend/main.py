@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
 import uuid
 import json
 import os
@@ -27,6 +28,18 @@ class AuditResponse(BaseModel):
     decision: str  # "ALLOW", "FLAG_FOR_REVIEW", or "BLOCK"
     alert_priority: Optional[str] = None  # "CRITICAL" when delta_score > 0.7
     voice_alert_text: Optional[str] = None  # Text for Azure AI Speech alert
+
+
+class PolicyRequest(BaseModel):
+    corporate_mission: str
+    approved_vendors: List[str]
+
+
+class PolicyResponse(BaseModel):
+    message: str
+    corporate_mission: str
+    approved_vendors: List[str]
+    updated_at: str
 
 
 def determine_audit_mode(proposed_action: str) -> str:
@@ -152,6 +165,112 @@ async def get_audit_logs():
         raise HTTPException(
             status_code=500,
             detail=f"Failed to read audit logs: {str(e)}"
+        )
+
+
+@app.post("/policy", response_model=PolicyResponse)
+async def update_policy(request: PolicyRequest):
+    """
+    Update corporate mission and approved vendors policy.
+    This data will be used to update the Azure AI Search index for trust baseline evaluation.
+    """
+    policy_file = "policy.json"
+    
+    policy_data = {
+        "corporate_mission": request.corporate_mission,
+        "approved_vendors": request.approved_vendors,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    
+    try:
+        with open(policy_file, 'w', encoding='utf-8') as f:
+            json.dump(policy_data, f, indent=2, ensure_ascii=False)
+        
+        return PolicyResponse(
+            message="Policy configuration saved successfully. Ready for Azure AI Search index update.",
+            corporate_mission=request.corporate_mission,
+            approved_vendors=request.approved_vendors,
+            updated_at=policy_data["updated_at"],
+        )
+    except IOError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save policy: {str(e)}"
+        )
+
+
+@app.get("/analytics")
+async def get_analytics():
+    """
+    Get analytics data for the dashboard.
+    Returns total audits, hijacks prevented, average delta, and risk trend over last 24 hours.
+    """
+    audits_file = "audits.json"
+    
+    if not os.path.exists(audits_file):
+        return {
+            "total_audits": 0,
+            "hijacks_prevented": 0,
+            "average_delta": 0.0,
+            "risk_trend": [],
+        }
+    
+    try:
+        with open(audits_file, 'r', encoding='utf-8') as f:
+            audits = json.load(f)
+        
+        # Calculate metrics
+        total_audits = len(audits)
+        hijacks_prevented = sum(1 for audit in audits if audit.get("decision") == "BLOCK")
+        
+        # Calculate average delta (last 24 hours)
+        now = datetime.utcnow()
+        twenty_four_hours_ago = now - timedelta(hours=24)
+        
+        recent_audits = [
+            audit for audit in audits
+            if "timestamp" in audit
+            and datetime.fromisoformat(audit["timestamp"].replace("Z", "+00:00")) >= twenty_four_hours_ago
+        ]
+        
+        if recent_audits:
+            average_delta = sum(audit.get("delta_score", 0) for audit in recent_audits) / len(recent_audits)
+        else:
+            average_delta = 0.0
+        
+        # Generate risk trend data (last 24 hours, hourly buckets)
+        risk_trend = []
+        for i in range(23, -1, -1):
+            hour_start = now - timedelta(hours=i + 1)
+            hour_end = now - timedelta(hours=i)
+            
+            hour_audits = [
+                audit for audit in audits
+                if "timestamp" in audit
+                and hour_start <= datetime.fromisoformat(audit["timestamp"].replace("Z", "+00:00")) < hour_end
+            ]
+            
+            if hour_audits:
+                avg_delta = sum(audit.get("delta_score", 0) for audit in hour_audits) / len(hour_audits)
+            else:
+                # Use overall average if no data for this hour
+                avg_delta = average_delta if recent_audits else 0.4
+            
+            risk_trend.append({
+                "hour": hour_end.strftime("%H:%M"),
+                "delta": round(avg_delta, 2),
+            })
+        
+        return {
+            "total_audits": total_audits,
+            "hijacks_prevented": hijacks_prevented,
+            "average_delta": round(average_delta, 2),
+            "risk_trend": risk_trend,
+        }
+    except (json.JSONDecodeError, IOError) as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read analytics: {str(e)}"
         )
 
 
