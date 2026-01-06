@@ -40,7 +40,10 @@ export default function DashboardPage() {
               transition={{ duration: 0.5, type: "spring" }}
               layout
             >
-              <ForensicCard audit={audit} />
+              <div onClick={() => window.location.assign(`/dashboard/${audit.audit_id}`)}
+ style={{cursor: 'pointer'}} aria-label="Open forensic detail report">
+  <ForensicCard audit={audit} />
+</div>
             </motion.div>
           ))}
         </AnimatePresence>
