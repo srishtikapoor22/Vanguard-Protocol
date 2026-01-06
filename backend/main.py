@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import uuid
-import random
 
-from .context_engine import get_trust_baseline
+from context_engine import get_trust_baseline
+from auditor import calculate_semantic_delta
 
 app = FastAPI(title="Vanguard Protocol API", version="1.0.0")
 
@@ -37,24 +37,6 @@ def determine_audit_mode(proposed_action: str) -> str:
     return "Asynchronous"
 
 
-def calculate_mock_delta_score(
-    mission_statement: str,
-    proposed_action: str,
-    reasoning_chain: List[str],
-    trust_baseline: Dict[str, Any],
-) -> float:
-    """
-    Mock implementation of Semantic Delta Score calculation.
-    Returns a random score between 0.0 and 1.0 for MVP purposes.
-
-    The trust_baseline argument models the requirement that the auditor must first
-    look up company rules / historical baselines before judging whether an action
-    could be Shadow Logic Hijacking.
-    """
-    # In the real implementation, this would use GPT-4o-mini to calculate
-    # the semantic delta between mission and action given context + trust baselines.
-    _ = (mission_statement, proposed_action, reasoning_chain, trust_baseline)
-    return round(random.uniform(0.0, 1.0), 2)
 
 
 @app.post("/audit", response_model=AuditResponse)
@@ -65,7 +47,7 @@ async def audit_action(request: AuditRequest):
     - Fetches trust baseline / company rules from the context engine
     - If proposed_action involves 'transfer' or 'delete', marks it as Synchronous (blocking)
     - Otherwise, marks it as Asynchronous (background)
-    - Returns a transaction_id, mock delta_score, and the trust_baseline used
+    - Returns a transaction_id, semantic delta_score, and the trust_baseline used
     """
     # Generate unique transaction ID
     transaction_id = str(uuid.uuid4())
@@ -76,11 +58,10 @@ async def audit_action(request: AuditRequest):
     # Determine audit mode based on proposed action
     audit_mode = determine_audit_mode(request.proposed_action)
 
-    # Calculate mock delta score using mission, action, reasoning, and trust baseline
-    delta_score = calculate_mock_delta_score(
+    # Calculate semantic delta score using mission, action, and trust baseline
+    delta_score = calculate_semantic_delta(
         request.mission_statement,
         request.proposed_action,
-        request.reasoning_chain,
         trust_baseline,
     )
 
