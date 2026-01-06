@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
-    "@shadcn/ui": "^0.0.4"
+    "@shadcn/ui": "^0.0.4",
+    "framer-motion": "^12.24.7"
   }
 }
