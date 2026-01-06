@@ -1,0 +1,10 @@
+{
+    "audit_id": "uuid-v4",
+    "timestamp": "ISO-8601",
+    "agent_mission": "Process vendor invoices for IT department",
+    "proposed_action": "Transfer $12,500 to 'Global Tech Corp'",
+    "reasoning_chain": "Invoice #8831 was received via email. It matches the total in the attachment.",
+    "semantic_delta": 0.82,
+    "risk_level": "CRITICAL",
+    "context_flags": ["New Vendor", "High Value", "Indirect Prompt Detected"]
+  }
