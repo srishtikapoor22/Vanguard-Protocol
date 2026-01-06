@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@fontsource/inter": "^5.2.8"
+    "@fontsource/inter": "^5.2.8",
+    "@shadcn/ui": "^0.0.4"
   }
 }
