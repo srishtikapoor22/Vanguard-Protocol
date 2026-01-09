@@ -4,6 +4,7 @@ import { useAuditStream } from "../../../../hooks/useAuditStream";
 import { EmergencyDialog } from "../../../../components/EmergencyDialog";
 import AgentInputSidebar from "./AgentInputSidebar";
 import AuditLogAccordion from "./AuditLogAccordion";
+import AudioAlertMute from "./AudioAlertMute";
 import * as React from "react";
 
 // Hardcoded immutable policy for side-by-side display
@@ -20,6 +21,26 @@ Vanguard Protocol is a Forensic Reasoning Firewall. It doesn't just look for bad
 export default function ForensicDashboard() {
   const audits = useAuditStream();
   const [modal, setModal] = React.useState<null | { reasoning: string }>(null);
+  const [muted, setMuted] = React.useState(false);
+  const [lastAlertId, setLastAlertId] = React.useState<string | null>(null);
+
+  // Voice alert effect
+  React.useEffect(() => {
+    const latest = audits[0];
+    if (!latest) return;
+    if (latest.risk_level === "CRITICAL" && !muted && latest.semantic_delta > 0.7 && latest.voice_alert_text && latest.audit_id !== lastAlertId) {
+      setLastAlertId(latest.audit_id);
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel(); // Stop any ongoing speech
+        const utter = new window.SpeechSynthesisUtterance(latest.voice_alert_text);
+        utter.rate = 1.1;
+        utter.pitch = 0.97;
+        utter.lang = "en-US";
+        utter.volume = 1;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+  }, [audits, muted, lastAlertId]);
 
   React.useEffect(() => {
     const latest = audits[0];
@@ -32,7 +53,11 @@ export default function ForensicDashboard() {
     <div className="flex min-h-screen bg-background">
       <div className="hidden md:block"><AgentInputSidebar /></div>
       <div className="flex-1 flex flex-col items-center px-2 md:px-12 lg:px-24 py-10">
-        <h1 className="text-3xl font-bold mb-2 text-white">Forensic Dashboard</h1>
+        <div className="flex items-center gap-2 w-full max-w-2xl">
+          <h1 className="text-3xl font-bold mb-2 text-white flex-1">Forensic Dashboard</h1>
+          <span className="text-zinc-400 text-xs mt-0.5">Voice Alerts</span>
+          <AudioAlertMute muted={muted} setMuted={setMuted} />
+        </div>
         <p className="text-zinc-400 mb-8">Real-time audit stream and threat detection</p>
         <div className="w-full max-w-2xl flex flex-col gap-6 overflow-y-auto pb-20 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-900" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           <AuditLogAccordion audits={audits} onRowClick={audit => window.location.assign(`/dashboard/${audit.audit_id}`)} />
