@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSpeechMute } from "../hooks/useSpeechMute";
 
 export function SimulatedAgentInput() {
   const [agentId, setAgentId] = useState("");
@@ -9,6 +10,8 @@ export function SimulatedAgentInput() {
   const [reasoningChain, setReasoningChain] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingAction, setIsGeneratingAction] = useState(false);
+  
+  const { triggerVoiceAlert, resetVoiceAlert } = useSpeechMute();
 
   const handleGenerateAction = async () => {
     if (!missionStatement.trim() || !agentId.trim()) {
@@ -16,7 +19,13 @@ export function SimulatedAgentInput() {
       return;
     }
 
+    // Reset voice alert state when generating a new action
+    resetVoiceAlert();
+    console.log("[State] Reset voice alert state for new generation");
+
     setIsGeneratingAction(true);
+    console.log("Generating action for mission:", missionStatement);
+    
     try {
       const response = await fetch("http://localhost:8000/generate-action", {
         method: "POST",
@@ -34,8 +43,12 @@ export function SimulatedAgentInput() {
       }
 
       const data = await response.json();
+      console.log("LLM Response:", data);
+      
       setProposedAction(data.proposed_action);
       setReasoningChain(data.reasoning_chain);
+      
+      console.log("Proposed action set to:", data.proposed_action);
     } catch (error) {
       console.error("Error generating action:", error);
       alert("Failed to generate action. Please try again.");
@@ -44,8 +57,53 @@ export function SimulatedAgentInput() {
     }
   };
 
+  /**
+   * Handle voice alert based on audit results
+   */
+  const handleVoiceAlert = (auditData: any) => {
+    const { decision, delta_score, voice_alert_text, transaction_id } = auditData;
+    
+    console.log("[Voice Alert] Evaluating:", { decision, delta_score, voice_alert_text });
+
+    // Always use backend's voice_alert_text if available, otherwise use fallback
+    let message = voice_alert_text;
+    
+    // Determine if this is a high-risk scenario
+    const isHighRisk = decision === "BLOCK" || delta_score > 0.7;
+    
+    if (isHighRisk) {
+      // High risk / Security violation
+      if (!message) {
+        message = "Warning: High risk security violation detected. Action blocked.";
+      }
+      triggerVoiceAlert(message, transaction_id);
+      console.log("[Voice Alert] HIGH RISK triggered:", message);
+    } else if (decision === "ALLOW") {
+      // Success / Action allowed
+      if (!message) {
+        message = "Action approved and logged successfully.";
+      }
+      triggerVoiceAlert(message, transaction_id);
+      console.log("[Voice Alert] SUCCESS triggered:", message);
+    } else if (decision === "FLAG_FOR_REVIEW") {
+      // Moderate risk - flagged for review
+      if (!message) {
+        message = "Moderate risk detected. Action flagged for review.";
+      }
+      triggerVoiceAlert(message, transaction_id);
+      console.log("[Voice Alert] REVIEW triggered:", message);
+    } else {
+      // Fallback for any other decision type
+      if (message) {
+        triggerVoiceAlert(message, transaction_id);
+        console.log("[Voice Alert] OTHER triggered:", message);
+      }
+    }
+  };
+
   const handleExecute = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Execute button clicked, proposed action:", proposedAction);
     
     if (!proposedAction.trim()) {
       alert("Please generate a proposed action first");
@@ -53,6 +111,7 @@ export function SimulatedAgentInput() {
     }
 
     setIsLoading(true);
+    console.log("Starting execution flow...");
 
     try {
       // Step 1: Submit to audit endpoint for risk assessment
@@ -74,6 +133,10 @@ export function SimulatedAgentInput() {
       }
 
       const auditData = await auditResponse.json();
+      console.log("Audit response:", auditData);
+
+      // Trigger voice alert based on audit results
+      handleVoiceAlert(auditData);
 
       // Step 2: Wait for risk assessment to complete, then store to ledger
       const ledgerResponse = await fetch("http://localhost:8000/api/ledger", {
@@ -97,6 +160,9 @@ export function SimulatedAgentInput() {
       if (!ledgerResponse.ok) {
         throw new Error("Failed to store Action Manifest to ledger");
       }
+
+      const ledgerData = await ledgerResponse.json();
+      console.log("Ledger response:", ledgerData);
 
       // Reset form on success
       setAgentId("");
@@ -177,7 +243,8 @@ export function SimulatedAgentInput() {
         <button
           type="submit"
           disabled={isLoading || !proposedAction.trim()}
-          className="mt-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+          className="mt-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 text-white font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+          title={!proposedAction.trim() ? "Please generate a proposed action first" : "Execute the action"}
         >
           {isLoading ? (
             <>

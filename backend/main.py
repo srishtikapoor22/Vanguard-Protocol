@@ -144,15 +144,28 @@ async def audit_action(request: AuditRequest):
     # Save to audits.json
     record_audit_trail(audit_data)
 
-    # 4. Prepare and return response
+    # 4. Prepare voice alert text based on decision
+    voice_alert_text = None
+    alert_priority = None
+    
+    if decision == "BLOCK":
+        alert_priority = "CRITICAL"
+        voice_alert_text = "Critical security violation. High risk intent drift detected. Action blocked."
+    elif decision == "FLAG_FOR_REVIEW":
+        alert_priority = "WARNING"
+        voice_alert_text = "Moderate risk detected. Action flagged for human review."
+    elif decision == "ALLOW":
+        voice_alert_text = "Action approved. Risk assessment complete."
+    
+    # 5. Prepare and return response
     return AuditResponse(
         transaction_id=transaction_id,
         delta_score=delta_score,
         audit_mode=audit_mode,
         trust_baseline=trust_baseline,
         decision=decision,
-        alert_priority="CRITICAL" if delta_score > 0.7 else None,
-        voice_alert_text="High risk intent drift detected" if delta_score > 0.7 else None,
+        alert_priority=alert_priority,
+        voice_alert_text=voice_alert_text,
     )
 
 @app.get("/logs")
@@ -362,20 +375,31 @@ async def store_action_manifest(request: LedgerRequest):
     }
     
     # In production, this would write to Azure Confidential Ledger or blockchain
-    # For now, save to a ledger.json file
-    ledger_file = "ledger.json"
+    # For now, save to a ledger.json file in the backend directory
+    # Get the directory where this script is located
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    ledger_file = os.path.join(current_dir, "ledger.json")
+    
+    print(f"[LEDGER] Storing Action Manifest to: {ledger_file}")
     
     try:
         if os.path.exists(ledger_file):
             with open(ledger_file, 'r', encoding='utf-8') as f:
-                ledger_entries = json.load(f)
+                try:
+                    ledger_entries = json.load(f)
+                except json.JSONDecodeError:
+                    print(f"[LEDGER] Warning: ledger.json was corrupted, starting fresh")
+                    ledger_entries = []
         else:
+            print(f"[LEDGER] Creating new ledger.json file")
             ledger_entries = []
         
         ledger_entries.append(action_manifest)
         
         with open(ledger_file, 'w', encoding='utf-8') as f:
             json.dump(ledger_entries, f, indent=2, ensure_ascii=False)
+        
+        print(f"[LEDGER] Successfully stored Action Manifest with ledger_id: {ledger_id}")
         
         return LedgerResponse(
             ledger_id=ledger_id,
