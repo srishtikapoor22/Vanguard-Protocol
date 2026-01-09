@@ -383,6 +383,8 @@ async def store_action_manifest(request: LedgerRequest):
     print(f"[LEDGER] Storing Action Manifest to: {ledger_file}")
     
     try:
+        # Ensure ledger.json exists (create if missing)
+        open(ledger_file, 'a').close()
         if os.path.exists(ledger_file):
             with open(ledger_file, 'r', encoding='utf-8') as f:
                 try:
@@ -412,6 +414,23 @@ async def store_action_manifest(request: LedgerRequest):
             detail=f"Failed to store Action Manifest: {str(e)}"
         )
 
+
+@app.get("/api/ledger", response_model=List[Dict[str, Any]])
+async def get_ledger_entries():
+    """
+    Return all ledger entries as a list (reverse chronological order).
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    ledger_file = os.path.join(current_dir, "ledger.json")
+    if not os.path.exists(ledger_file):
+        return []
+    try:
+        with open(ledger_file, 'r', encoding='utf-8') as f:
+            entries = json.load(f)
+            entries.reverse()  # newest first
+            return entries
+    except (json.JSONDecodeError, IOError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read ledger: {str(e)}")
 
 @app.get("/")
 async def root():

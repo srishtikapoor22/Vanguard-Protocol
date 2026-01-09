@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSpeechMute } from "../hooks/useSpeechMute";
 
 export function SimulatedAgentInput() {
@@ -164,6 +164,8 @@ export function SimulatedAgentInput() {
       const ledgerData = await ledgerResponse.json();
       console.log("Ledger response:", ledgerData);
 
+      // Refresh ledger after success
+      if (typeof SimulatedAgentInput._setLedgerRefresh === 'function') SimulatedAgentInput._setLedgerRefresh((v:any) => v + 1);
       // Reset form on success
       setAgentId("");
       setMissionStatement("");
@@ -275,7 +277,85 @@ export function SimulatedAgentInput() {
           )}
         </button>
       </form>
+    {/* Vanguard Security Ledger Section */}
+    <div className="mt-8">
+      <h3 className="text-lg font-bold text-blue-300 mb-3">Vanguard Security Ledger (Azure Simulated)</h3>
+      <LedgerSimulatorSection />
+    </div>
+  </div>
+  );
+}
+
+// New: LedgerSimulatorSection implementation
+function LedgerSimulatorSection() {
+  // For programmatic refresh
+  SimulatedAgentInput._setLedgerRefresh = useState(0)[1];
+  const [ledgerEntries, setLedgerEntries] = useState<any[]>([]);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
+  // Listen for refresh (static field)
+  const [, setRefresh] = useState(0);
+  useEffect(() => {
+    SimulatedAgentInput._setLedgerRefresh = () => setRefresh(r => {
+      fetchLedgerEntries();
+      return r + 1;
+    });
+    fetchLedgerEntries();
+    return () => { SimulatedAgentInput._setLedgerRefresh = () => {}; };
+  }, []);
+
+  // Helper to fetch ledger
+  const fetchLedgerEntries = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/api/ledger");
+      if (!res.ok) {
+        throw new Error("Failed to load ledger entries");
+      }
+      const data = await res.json();
+      setLedgerEntries(data);
+    } catch (e) {
+      setLedgerEntries([]);
+    }
+  };
+
+  // Click handler
+  const handleExpand = (idx: number) => {
+    setExpandedIdx(expandedIdx === idx ? null : idx);
+  };
+
+  return (
+    <div className="bg-zinc-800 rounded-lg border border-zinc-700 p-3">
+      {ledgerEntries.length === 0 ? (
+        <div className="text-zinc-500 italic">No log entries yet.</div>
+      ) : (
+        <ol className="space-y-2">
+          {ledgerEntries.map((e, idx) => (
+            <li
+              key={e.ledger_id || idx}
+              className="bg-zinc-900 rounded p-2 cursor-pointer hover:bg-blue-950 border border-zinc-700 transition-colors"
+              onClick={() => handleExpand(idx)}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-blue-400">
+                  {e.timestamp}
+                </span>
+                <span className="ml-2 font-semibold text-zinc-100">
+                  {e.agent_id} — {e.decision} <span className="text-xs">({e.ledger_status})</span>
+                </span>
+                <span className="ml-2 font-mono text-xs text-zinc-500">{e.ledger_id?.slice(0,8) || idx}</span>
+                <span className="ml-4 text-xs text-blue-400">{expandedIdx === idx ? "[-]" : "[+]"}</span>
+              </div>
+              {expandedIdx === idx && (
+                <pre className="mt-2 bg-zinc-950 p-2 max-w-full overflow-auto rounded text-xs text-blue-100 border border-zinc-800 font-mono">
+                  {JSON.stringify(e, null, 2)}
+                </pre>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
+
 
