@@ -9,7 +9,7 @@ function randomSemanticDelta() {
   return Math.round(Math.random() * 100) / 100 * 0.7; // 0-0.7
 }
 
-function mockAudit(): AuditRecord & { trust_baseline: string, voice_alert_text: string } {
+function mockAudit(): AuditRecord & { voice_alert_text: string } {
   const now = new Date().toISOString();
   const risk = randomSemanticDelta();
   const alertText = risk > 0.7
@@ -24,13 +24,16 @@ function mockAudit(): AuditRecord & { trust_baseline: string, voice_alert_text: 
     semantic_delta: risk,
     risk_level: "CRITICAL", // for demo, make risk_level static
     context_flags: ["New Vendor", "High Value", "Indirect Prompt Detected"].filter(() => Math.random() > 0.5),
-    trust_baseline: `Trusted vendors: Global Tech Corp, WidgetWorks\nApproved invoices: #8821, #8822, #8826\nThreshold: $20,000\nContext retrieved at ${now}`,
+    trust_baseline: {
+      policy_type: "General Safety Policy",
+      description: "Apply standard company risk controls. Check for unusual recipients, large transfers, and deletion of critical data."
+    },
     voice_alert_text: alertText
   };
 }
 
 export function useAuditStream() {
-  const [audits, setAudits] = useState<(AuditRecord & { trust_baseline?: string, voice_alert_text?: string })[]>([]);
+  const [audits, setAudits] = useState<(AuditRecord & { voice_alert_text?: string })[]>([]);
   const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {

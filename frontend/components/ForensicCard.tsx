@@ -1,5 +1,4 @@
-import { FC } from "react";
-import { Progress } from "@shadcn/ui";
+import { FC, useState } from "react";
 import { getRiskColor } from "../lib/utils";
 import { AuditRecord } from "../types/audit";
 
@@ -24,6 +23,28 @@ const AccessibilityShield = ({ title }: { title: string }) => (
 export const ForensicCard: FC<{ audit: AuditRecord }> = ({ audit }) => {
   const { color, label } = getRiskColor(audit.semantic_delta);
   const highRisk = audit.semantic_delta >= 0.7;
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Format reasoning chain - handle both string and array
+  const formatReasoningChain = () => {
+    if (Array.isArray(audit.reasoning_chain)) {
+      return audit.reasoning_chain.join('\n');
+    }
+    return audit.reasoning_chain;
+  };
+
+  // Format trust baseline
+  const formatTrustBaseline = () => {
+    if (!audit.trust_baseline) {
+      return 'N/A';
+    }
+    return `Policy Type: ${audit.trust_baseline.policy_type}\nDescription: ${audit.trust_baseline.description}`;
+  };
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card navigation
+    setIsExpanded(!isExpanded);
+  };
 
   return (
     <div
@@ -56,32 +77,89 @@ export const ForensicCard: FC<{ audit: AuditRecord }> = ({ audit }) => {
           {audit.semantic_delta.toFixed(2)} ({label})
         </span>
       </div>
-      <Progress
-        aria-label="Risk Level Progress"
-        value={audit.semantic_delta * 100}
+      <div
+        className="w-full h-2.5 rounded-md overflow-hidden mb-6"
         style={{
           background: '#222',
-          height: 10,
-          borderRadius: 6,
-          marginBottom: 24,
-          accentColor: color,
         }}
-      />
-      <div className="mb-2 font-semibold text-zinc-200">Reasoning Chain</div>
-      <pre
-        className="overflow-x-auto rounded-lg bg-[#111114] border border-zinc-700 p-4 text-xs text-zinc-100 font-mono focus:outline-none"
-        style={{
-          background: '#111114',
-          color: '#f8fafc',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-          boxShadow: 'inset 0 1px 4px #0008',
-        }}
-        tabIndex={0}
-        aria-label="Reasoning Chain code block"
-        role="region"
+        role="progressbar"
+        aria-label="Risk Level Progress"
+        aria-valuenow={audit.semantic_delta * 100}
+        aria-valuemin={0}
+        aria-valuemax={100}
       >
-        {audit.reasoning_chain}
-      </pre>
+        <div
+          className="h-full transition-all duration-300"
+          style={{
+            width: `${audit.semantic_delta * 100}%`,
+            background: color,
+          }}
+        />
+      </div>
+      
+      {/* Collapsible Toggle Button */}
+      <button
+        onClick={handleToggle}
+        className="w-full flex items-center justify-between mb-2 p-2 rounded-md hover:bg-zinc-800 transition-colors text-left"
+        aria-expanded={isExpanded}
+        aria-controls={`audit-details-${audit.audit_id}`}
+      >
+        <span className="font-semibold text-zinc-200">View Details</span>
+        <svg
+          className={`w-5 h-5 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Collapsible Content */}
+      {isExpanded && (
+        <div id={`audit-details-${audit.audit_id}`} className="space-y-4 mt-2">
+          {/* Reasoning Chain */}
+          <div>
+            <div className="mb-2 font-semibold text-zinc-300 text-sm">Reasoning Chain</div>
+            <pre
+              className="overflow-x-auto rounded-lg bg-[#0a0a0b] border border-zinc-700 p-4 text-xs text-green-400 font-mono focus:outline-none"
+              style={{
+                background: '#0a0a0b',
+                color: '#4ade80',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                boxShadow: 'inset 0 1px 4px #0008',
+                lineHeight: '1.5',
+              }}
+              tabIndex={0}
+              aria-label="Reasoning Chain terminal output"
+              role="region"
+            >
+              {formatReasoningChain()}
+            </pre>
+          </div>
+
+          {/* Trust Baseline */}
+          <div>
+            <div className="mb-2 font-semibold text-zinc-300 text-sm">Trust Baseline</div>
+            <pre
+              className="overflow-x-auto rounded-lg bg-[#0a0a0b] border border-zinc-700 p-4 text-xs text-cyan-400 font-mono focus:outline-none"
+              style={{
+                background: '#0a0a0b',
+                color: '#22d3ee',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                boxShadow: 'inset 0 1px 4px #0008',
+                lineHeight: '1.5',
+              }}
+              tabIndex={0}
+              aria-label="Trust Baseline terminal output"
+              role="region"
+            >
+              {formatTrustBaseline()}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
