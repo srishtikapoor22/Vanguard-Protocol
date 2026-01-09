@@ -19,7 +19,11 @@ function mockAudit(): AuditRecord {
     reasoning_chain: `Invoice #${Math.floor(Math.random()*9000+1000)}: matched invoice, vendor, account and amount.`,
     semantic_delta: randomSemanticDelta(),
     risk_level: "CRITICAL", // for demo, make risk_level static
-    context_flags: ["New Vendor", "High Value", "Indirect Prompt Detected"].filter(() => Math.random() > 0.5)
+    context_flags: ["New Vendor", "High Value", "Indirect Prompt Detected"].filter(() => Math.random() > 0.5),
+    trust_baseline: {
+      policy_type: "General Safety Policy",
+      description: "Apply standard company risk controls. Check for unusual recipients, large transfers, and deletion of critical data."
+    }
   };
 }
 
