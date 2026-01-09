@@ -1,10 +1,9 @@
 "use client";
 
-import { ForensicCard } from "../../../../components/ForensicCard";
 import { useAuditStream } from "../../../../hooks/useAuditStream";
 import { EmergencyDialog } from "../../../../components/EmergencyDialog";
 import AgentInputSidebar from "./AgentInputSidebar";
-import { motion, AnimatePresence } from "framer-motion";
+import AuditLogAccordion from "./AuditLogAccordion";
 import * as React from "react";
 
 // Hardcoded immutable policy for side-by-side display
@@ -36,26 +35,7 @@ export default function ForensicDashboard() {
         <h1 className="text-3xl font-bold mb-2 text-white">Forensic Dashboard</h1>
         <p className="text-zinc-400 mb-8">Real-time audit stream and threat detection</p>
         <div className="w-full max-w-2xl flex flex-col gap-6 overflow-y-auto pb-20 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-900" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-          <AnimatePresence initial={false}>
-            {audits.map((audit) => (
-              <motion.div
-                key={audit.audit_id}
-                initial={{ y: -50, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.5, type: "spring" }}
-                layout
-              >
-                <div
-                  onClick={() => window.location.assign(`/dashboard/${audit.audit_id}`)}
-                  style={{ cursor: 'pointer' }}
-                  aria-label="Open forensic detail report"
-                >
-                  <ForensicCard audit={audit} />
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+          <AuditLogAccordion audits={audits} onRowClick={audit => window.location.assign(`/dashboard/${audit.audit_id}`)} />
         </div>
         <EmergencyDialog
           open={!!modal}
