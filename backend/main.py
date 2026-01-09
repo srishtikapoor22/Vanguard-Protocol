@@ -5,12 +5,20 @@ from datetime import datetime, timedelta
 import uuid
 import json
 import os
-
+from fastapi.middleware.cors import CORSMiddleware
 from context_engine import get_trust_baseline
 from auditor import calculate_semantic_delta
 from notary import record_audit_trail
+import time
 
 app = FastAPI(title="Vanguard Protocol API", version="1.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class AuditRequest(BaseModel):
@@ -76,68 +84,48 @@ def determine_decision(delta_score: float) -> str:
 
 @app.post("/audit", response_model=AuditResponse)
 async def audit_action(request: AuditRequest):
-    """
-    Audit endpoint that implements the Tiered Auditor logic.
-
-    - Fetches trust baseline / company rules from the context engine
-    - If proposed_action involves 'transfer' or 'delete', marks it as Synchronous (blocking)
-    - Otherwise, marks it as Asynchronous (background)
-    - Returns a transaction_id, semantic delta_score, and the trust_baseline used
-    - If delta_score > 0.7, includes alert_priority: "CRITICAL" and voice_alert_text for frontend alerts
-    """
-    # Generate unique transaction ID
+    # 1. Setup IDs and Timing
     transaction_id = str(uuid.uuid4())
+    current_time = time.strftime("%H:%M:%S")
 
-    # Fetch company rules / trust baseline *before* scoring
+    # 2. Run Logic
     trust_baseline = get_trust_baseline(request.proposed_action)
-
-    # Determine audit mode based on proposed action
     audit_mode = determine_audit_mode(request.proposed_action)
-
-    # Calculate semantic delta score using mission, action, and trust baseline
     delta_score = calculate_semantic_delta(
         request.mission_statement,
         request.proposed_action,
         trust_baseline,
     )
-
-    # Determine decision based on delta_score
     decision = determine_decision(delta_score)
 
-    # Determine if critical alert is needed (delta_score > 0.7)
-    alert_priority = None
-    voice_alert_text = None
-    if delta_score > 0.7:
-        alert_priority = "CRITICAL"
-        voice_alert_text = "Warning: High risk intent drift detected. Delta score exceeds threshold."
-
-    # Prepare audit response
-    response = AuditResponse(
-        transaction_id=transaction_id,
-        delta_score=delta_score,
-        audit_mode=audit_mode,
-        trust_baseline=trust_baseline,
-        decision=decision,
-        alert_priority=alert_priority,
-        voice_alert_text=voice_alert_text,
-    )
-
-    # Record immutable audit trail for compliance
+    # 3. Create the data object for the JSON file
+    # We use 'request' to match your function argument
     audit_data = {
-        "transaction_id": transaction_id,
+        "id": transaction_id[:8], 
+        "timestamp": current_time,
         "agent_id": request.agent_id,
         "mission_statement": request.mission_statement,
         "proposed_action": request.proposed_action,
         "reasoning_chain": request.reasoning_chain,
         "delta_score": delta_score,
-        "audit_mode": audit_mode,
         "decision": decision,
+        "audit_mode": audit_mode,
         "trust_baseline": trust_baseline,
     }
+    
+    # Save to audits.json
     record_audit_trail(audit_data)
 
-    return response
-
+    # 4. Prepare and return response
+    return AuditResponse(
+        transaction_id=transaction_id,
+        delta_score=delta_score,
+        audit_mode=audit_mode,
+        trust_baseline=trust_baseline,
+        decision=decision,
+        alert_priority="CRITICAL" if delta_score > 0.7 else None,
+        voice_alert_text="High risk intent drift detected" if delta_score > 0.7 else None,
+    )
 
 @app.get("/logs")
 async def get_audit_logs():

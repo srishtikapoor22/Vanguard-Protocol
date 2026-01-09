@@ -1,19 +1,16 @@
 /** @type {import('tailwindcss').Config} */
+import animate from "tailwindcss-animate"; // Add this line at the top
+
 export default {
-  darkMode: 'class',
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
   theme: {
     extend: {
-      colors: {
-        background: '#09090b',
-        card: '#18181b',
-        accent: '#3b82f6', // Electric Blue
-        warning: '#f59e0b', // Warning Amber
-      },
-      fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui'],
-      },
+      // your existing theme extensions
     },
   },
-  plugins: [],
+  plugins: [animate], // Add the 'animate' variable here
 };
-
